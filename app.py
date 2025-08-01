@@ -3,21 +3,9 @@ import pandas as pd
 import re
 from collections import Counter, OrderedDict
 
-st.title("7월 편현준 데이터 분석 (환자별 규칙 + 날짜별 + 월 총계)")
+st.title("7월 편현준 데이터 분석 (고정규칙 포함 변환 가능)")
 
-# 환자별 고정 규칙
-patient_rule_map = {
-    "곽순욱": "도수8",
-    "박한나": "도수8",
-    "강대환": "pain9",
-    "주영민": "NDT",
-    "문장민": "도수9",
-    "변인혁": "도수8",
-    "홍한나": "도수9",
-    "이성범": "도수9",
-    # 추가 가능
-}
-
+# 기본 변환 규칙
 default_replacements = {
     "simple": "도수9",
     "도수7": "도수8",
@@ -25,7 +13,26 @@ default_replacements = {
     "도수9*": "도수9",
 }
 
+# 기본 제외 키워드
 default_exclude_keywords = ["FES", "기구", "예약", "예약문자"]
+
+# 환자별 고정 규칙 (입력 폼에서 직접 작성)
+# 예시 형식: 곽순욱=>도수8
+patient_rule_input = st.sidebar.text_area(
+    "환자별 고정 변환 규칙 (한 줄에 '이름=>치료명' 형식)", 
+    value="곽순욱=>도수8\n박한나=>도수8\n강대환=>pain9\n주영민=>NDT\n문장민=>도수9\n변인혁=>도수8\n홍한나=>도수9\n이성범=>도수9",
+    height=180
+)
+
+def parse_patient_rules(text):
+    rules = {}
+    for line in text.split("\n"):
+        if "=>" in line:
+            name, treat = line.split("=>", 1)
+            rules[name.strip()] = treat.strip()
+    return rules
+
+patient_rule_map = parse_patient_rules(patient_rule_input)
 
 def apply_replacements(text, replacements):
     for k, v in replacements.items():
@@ -41,7 +48,7 @@ def clean_treatment_text(text, exclude_keywords):
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-def extract_name_and_treatment(val, replacements, exclude_keywords, custom_rules):
+def extract_name_and_treatment(val, replacements, exclude_keywords, custom_rules, patient_rules):
     if pd.isnull(val):
         return None, None
     sval = str(val).strip()
@@ -54,8 +61,9 @@ def extract_name_and_treatment(val, replacements, exclude_keywords, custom_rules
     name = m.group(1).replace("(", "").replace(")", "")
     treat = m.group(2).strip()
 
-    if name in patient_rule_map:
-        return name, patient_rule_map[name]
+    # 환자별 고정 규칙 우선 적용
+    if name in patient_rules:
+        return name, patient_rules[name]
 
     treat = apply_replacements(treat, replacements)
     for rule in custom_rules:
@@ -107,7 +115,7 @@ if uploaded_file:
                 continue
             col_data = df[right_col].dropna().tolist()
             for val in col_data:
-                name, treat = extract_name_and_treatment(val, {}, exclude_keywords, custom_rules)
+                name, treat = extract_name_and_treatment(val, {}, exclude_keywords, custom_rules, patient_rule_map)
                 if name:
                     if name not in daily_seen:
                         daily_seen[name] = treat
@@ -130,4 +138,3 @@ if uploaded_file:
     st.table(Counter(monthly_seen.values()))
 else:
     st.info("왼쪽 사이드바에서 규칙을 조정하고 엑셀 파일을 업로드 해주세요.")
-
