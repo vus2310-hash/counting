@@ -3,7 +3,7 @@ import pandas as pd
 import re
 from collections import Counter, OrderedDict
 
-st.title("7월 편현준 데이터 맞춤형 자동 분석기")
+st.title("7월 편현준 데이터 맞춤형 자동 분석기 (날짜별 분류 포함)")
 
 # 기본 변환 규칙 (치환 리스트 형태)
 default_replacements = {
@@ -107,10 +107,11 @@ uploaded_file = st.file_uploader("엑셀 파일 업로드 (.xlsx)", type=["xlsx"
 if uploaded_file:
     xls = pd.ExcelFile(uploaded_file)
     days = [str(i) for i in range(1, 32)]
-    monthly_seen = OrderedDict()
+    all_day_results = {}
 
     for day in days:
         target_sheets = [s for s in xls.sheet_names if day in s]
+        daily_seen = OrderedDict()
         for sheet in target_sheets:
             df = pd.read_excel(xls, sheet_name=sheet, header=1)
             colname = next((c for c in df.columns if "편현준" in str(c)), None)
@@ -123,13 +124,16 @@ if uploaded_file:
             col_data = df[right_col].dropna().tolist()
             for val in col_data:
                 name, treat = extract_name_and_treatment(val, {}, exclude_keywords, custom_rules)
-                if name and name not in monthly_seen:
-                    monthly_seen[name] = treat
+                if name and name not in daily_seen:
+                    daily_seen[name] = treat
+        if daily_seen:
+            all_day_results[day] = daily_seen
 
-    counts = Counter(monthly_seen.values())
-    st.subheader("이름별 첫 등장 치료명")
-    st.table(monthly_seen)
-    st.subheader("치료명별 집계")
-    st.table(counts)
+    for day, results in all_day_results.items():
+        st.subheader(f"{day}일 분석 결과")
+        st.write("이름별 첫 등장 치료명")
+        st.table(results)
+        st.write("치료명별 집계")
+        st.table(Counter(results.values()))
 else:
     st.info("왼쪽 사이드바에서 규칙을 조정하고 엑셀 파일을 업로드 해주세요.")
